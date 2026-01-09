@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum JobStatus {
+  /// 任务创建，资金已冻结，等待执行
+  open
+  /// Agent 正在执行
+  running
+  /// Agent 已提交结果，等待用户确认
+  pending_review
+  /// 用户确认，结算完成
+  completed
+}
+
+enum BillStatus {
+  /// 账单已创建并锁定
+  locked
+  /// 用户确认，资金释放给 Agent
+  released
+}
+
+enum AgentStatus {
+  /// Agent 可用
+  enabled
+  /// Agent 停用或隐藏
+  disabled
+}
+
+enum WithdrawalStatus {
+  /// 用户发起提现
+  requested
+  /// 后端已提交链上交易
+  sent
+  /// 链上交易已确认
+  confirmed
+  /// 链上交易失败或回滚
+  failed
+}
+
+enum LedgerDirection {
+  /// 入账
+  credit
+  /// 出账
+  debit
+}
+
+enum LedgerReason {
+  /// 充值入账
+  deposit
+  /// 提现出账
+  withdraw
+  /// 任务创建冻结
+  job_lock
+  /// 任务确认释放
+  job_release
+  /// 平台币增发
+  mint
+  /// 平台币销毁
+  burn
+}
+
+model User {
+  /// 内部主键
+  id            BigInt   @id @default(autoincrement())
+  /// 钱包地址（建议小写）
+  walletAddress String   @unique @db.VarChar(64)
+  /// 创建时间
+  createdAt     DateTime @default(now())
+
+  /// 余额镜像（1:1）
+  balance     Balance?
+  /// 该用户拥有的 Agent
+  agents      Agent[]
+  /// 该用户创建的 Job
+  jobs        Job[]
+  /// 提现记录
+  withdrawals Withdrawal[]
+  /// 账本记录
+  ledgers     Ledger[]
+
+  @@map("users")
+}
+
+model Balance {
+  /// 用户主键与外键
+  userId    BigInt   @id
+  /// 可用余额（平台币镜像）
+  available Decimal  @default(0) @db.Decimal(36, 18)
+  /// 冻结余额（平台币镜像）
+  frozen    Decimal  @default(0) @db.Decimal(36, 18)
+  /// 更新时间（自动）
+  updatedAt DateTime @updatedAt
+
+  /// 关联用户
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("balances")
+}
+
+model Agent {
+  /// 内部主键
+  id          BigInt      @id @default(autoincrement())
+  /// Agent 所属用户 ID
+  ownerUserId BigInt
+  /// Agent 名称
+  name        String      @db.VarChar(80)
+  /// Agent 执行地址
+  url         String      @db.Text
+  /// 描述（可选）
+  description String?     @db.Text
+  /// 单次执行价格（平台币）
+  price       Decimal     @db.Decimal(36, 18)
+  /// 启用/停用
+  status      AgentStatus @default(enabled)
+  /// 创建时间
+  createdAt   DateTime    @default(now())
+  /// 更新时间（自动）
+  updatedAt   DateTime    @updatedAt
+
+  /// 关联用户
+  owner User  @relation(fields: [ownerUserId], references: [id])
+  /// 关联任务
+  jobs  Job[]
+
+  @@index([status])
+  @@map("agents")
+}
+
+model Job {
+  /// 内部主键
+  id             BigInt    @id @default(autoincrement())
+  /// 任务创建者 ID
+  userId         BigInt
+  /// 选择的 Agent ID
+  agentId        BigInt
+  /// 任务状态
+  status         JobStatus @default(open)
+  /// 执行结果文本（或 JSON 字符串）
+  resultText     String?   @db.Text
+  /// 结果元数据（如图片/文件 URL）
+  resultMetaJson Json?
+  /// 创建时间
+  createdAt      DateTime  @default(now())
+  /// 更新时间（自动）
+  updatedAt      DateTime  @updatedAt
+
+  /// 关联用户
+  user  User  @relation(fields: [userId], references: [id])
+  /// 关联 Agent
+  agent Agent @relation(fields: [agentId], references: [id])
+  /// 关联账单（1:1）
+  bill  Bill?
+
+  @@index([userId])
+  @@index([agentId])
+  @@index([status])
+  @@map("jobs")
+}
+
+model Bill {
+  /// 内部主键
+  id         BigInt     @id @default(autoincrement())
+  /// 关联 Job（唯一 1:1）
+  jobId      BigInt     @unique
+  /// 账单状态
+  status     BillStatus @default(locked)
+  /// 账单金额（平台币）
+  amount     Decimal    @db.Decimal(36, 18)
+  /// 释放时间（确认后）
+  releasedAt DateTime?
+  /// 创建时间
+  createdAt  DateTime   @default(now())
+
+  /// 关联 Job
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("bills")
+}
+
+model ChainEvent {
+  /// 内部主键
+  id          BigInt   @id @default(autoincrement())
+  /// 链 ID（EVM）
+  chainId     BigInt
+  /// 交易哈希
+  txHash      String   @db.VarChar(66)
+  /// 交易内日志序号（幂等）
+  logIndex    Int
+  /// 事件类型名
+  eventType   String   @db.VarChar(64)
+  /// 原始事件数据
+  payloadJson Json
+  /// 区块号
+  blockNumber BigInt
+  /// 记录时间
+  createdAt   DateTime @default(now())
+
+  @@unique([chainId, txHash, logIndex])
+  @@map("chain_events")
+}
+
+model Withdrawal {
+  /// 内部主键
+  id          BigInt           @id @default(autoincrement())
+  /// 提现用户
+  userId      BigInt
+  /// 提现金额（平台币）
+  amount      Decimal          @db.Decimal(36, 18)
+  /// 提现状态
+  status      WithdrawalStatus @default(requested)
+  /// 链上交易哈希（已发送时）
+  txHash      String?          @db.VarChar(66)
+  /// 申请时间
+  requestedAt DateTime         @default(now())
+  /// 更新时间（自动）
+  updatedAt   DateTime         @updatedAt
+
+  /// 关联用户
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@map("withdrawals")
+}
+
+model Ledger {
+  /// 内部主键
+  id        BigInt          @id @default(autoincrement())
+  /// 关联用户
+  userId    BigInt
+  /// 入账/出账
+  direction LedgerDirection
+  /// 资产标识，例如 PLATFORM/USDT
+  asset     String          @db.VarChar(16)
+  /// 账本金额
+  amount    Decimal         @db.Decimal(36, 18)
+  /// 业务原因
+  reason    LedgerReason
+  /// 关联引用（job/bill/withdrawal/chain_event）
+  refId     BigInt?
+  /// 创建时间
+  createdAt DateTime        @default(now())
+
+  /// 关联用户
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("ledgers")
+}
