@@ -1,6 +1,6 @@
 # 数据库文档（MVP）初版
 
-本文档描述 MVP 使用的 PostgreSQL 数据模型，Prisma 版本在 `prisma/schema.prisma`。
+本文档描述 MVP 使用的 PostgreSQL 数据模型，Drizzle 版本在 `src/drizzle/schema.ts`。
 
 ```mermaid
 erDiagram

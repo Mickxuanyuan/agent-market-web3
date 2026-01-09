@@ -8,8 +8,8 @@
 
 ## 数据与持久化
 - PostgreSQL：核心业务数据存储。
-- Prisma：ORM 与迁移工具，生成类型安全的数据库访问层。
-- Prisma Adapter (PostgreSQL)：Prisma 7 必需的数据库适配层。
+- Drizzle ORM：类型安全的数据库访问层。
+- Drizzle Kit：迁移与 schema 生成工具。
 
 ## Web3 连接（规划）
 - viem 或 ethers：链上交互与事件监听（后续接入）。
@@ -31,6 +31,6 @@
 
 ## 目录结构（后端）
 - `src/modules`：业务模块（Agent、Job、Bill、Wallet）。
-- `src/prisma`：Prisma 服务封装。
-- `prisma/`：数据模型与迁移。
+- `src/drizzle`：Drizzle 服务与 schema。
+- `drizzle/`：Drizzle Kit 迁移输出目录。
 - `docs/`：文档（ERD、数据库、API、技术栈）。
