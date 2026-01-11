@@ -11,6 +11,7 @@ import { balances, users } from '../../drizzle/schema';
 import { WALLET_ADDRESS_HEADER } from './auth.constants';
 import type { CurrentUser } from './types';
 
+// 规范化钱包地址：去空格并转小写。
 function normalizeWalletAddress(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return '';
@@ -20,8 +21,10 @@ function normalizeWalletAddress(value: string): string {
 
 @Injectable()
 export class WalletAuthGuard implements CanActivate {
+  // 注入数据库访问服务。
   constructor(private readonly drizzle: DrizzleService) {}
 
+  // 开发期钱包头鉴权：读取钱包地址并注入 request.user。
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Nest 的 request（Express）对象；我们在下面写入 request.user 供 Controller 使用。
     const request = context

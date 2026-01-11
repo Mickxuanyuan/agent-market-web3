@@ -16,8 +16,10 @@ type JwtPayload = {
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  // 注入 JWT 服务。
   constructor(private readonly jwt: JwtService) {}
 
+  // 校验 Authorization Bearer token，并注入 request.user。
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
@@ -51,4 +53,3 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 }
-

@@ -8,6 +8,7 @@ import { AgentsModule } from './modules/agents/agents.module';
 import { BillsModule } from './modules/bills/bills.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { WalletModule } from './modules/wallet/wallet.module';
+import { ChainEventsModule } from './modules/chain-events/chain-events.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     JobsModule,
     BillsModule,
     WalletModule,
+    ChainEventsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

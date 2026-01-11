@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
+// 应用启动入口：初始化 NestJS 并挂载 Swagger。
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = new DocumentBuilder()
@@ -14,4 +15,5 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
   await app.listen(process.env.PORT ?? 3000);
 }
+// 启动应用。
 bootstrap();

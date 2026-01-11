@@ -3,7 +3,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, isNotNull, lte, or } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { verifyMessage } from 'viem';
 import { JwtService } from '@nestjs/jwt';
@@ -19,21 +19,25 @@ type ParsedMessage = {
 
 @Injectable()
 export class AuthService {
+  // 注入数据库与 JWT 服务。
   constructor(
     private readonly drizzle: DrizzleService,
     private readonly jwt: JwtService,
   ) {}
 
+  // 规范化钱包地址：去空格并转小写。
   private normalizeWalletAddress(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return '';
     return trimmed.toLowerCase();
   }
 
+  // 构造待签名消息文本。
   private buildMessage(params: { address: string; nonce: string }) {
     return `Agent Market Web3 Login\nAddress: ${params.address}\nNonce: ${params.nonce}`;
   }
 
+  // 解析并校验待签名消息文本。
   private parseMessage(message: string): ParsedMessage {
     const lines = message.split('\n').map((line) => line.trim());
     if (lines.length < 3) {
@@ -60,6 +64,14 @@ export class AuthService {
     return { address, nonce };
   }
 
+  // 清理过期或已使用的 nonce，避免表持续膨胀。
+  private async cleanupNonces(now: Date) {
+    await this.drizzle.db.delete(authNonces).where(
+      or(lte(authNonces.expiresAt, now), isNotNull(authNonces.usedAt)),
+    );
+  }
+
+  // 创建一次性 nonce，并返回待签名消息。
   async createNonce(address: string) {
     const normalized = this.normalizeWalletAddress(address);
     if (!normalized || normalized.length > 64) {
@@ -69,6 +81,7 @@ export class AuthService {
     const nonce = randomBytes(16).toString('hex');
     const issuedAt = new Date();
     const expiresAt = new Date(issuedAt.getTime() + NONCE_TTL_SECONDS * 1000);
+    await this.cleanupNonces(issuedAt);
 
     const message = this.buildMessage({
       address: normalized,
@@ -90,10 +103,12 @@ export class AuthService {
     };
   }
 
+  // 校验签名并签发 JWT。
   async verify(message: string, signature: string) {
     const parsed = this.parseMessage(message);
 
     const now = new Date();
+    await this.cleanupNonces(now);
 
     const nonceRow = await this.drizzle.db
       .select()

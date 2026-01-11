@@ -8,12 +8,14 @@ import { VerifyResponseDto } from './dto/verify-response.dto';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
+  // 注入认证服务。
   constructor(private readonly auth: AuthService) {}
 
   @Get('nonce')
   @ApiOperation({ summary: '获取 nonce', description: '生成一次性口令与待签名消息' })
   @ApiQuery({ name: 'address', required: true })
   @ApiOkResponse({ type: NonceResponseDto })
+  // 获取 nonce 与待签名消息。
   async getNonce(@Query('address') address: string): Promise<NonceResponseDto> {
     return this.auth.createNonce(address);
   }
@@ -21,8 +23,8 @@ export class AuthController {
   @Post('verify')
   @ApiOperation({ summary: '验签登录', description: '验证签名并签发 JWT' })
   @ApiOkResponse({ type: VerifyResponseDto })
+  // 验签并签发 JWT。
   async verify(@Body() dto: VerifyDto): Promise<VerifyResponseDto> {
     return this.auth.verify(dto.message, dto.signature);
   }
 }
-

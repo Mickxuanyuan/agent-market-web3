@@ -14,6 +14,7 @@ import { JobsService } from './jobs.service';
 @UseGuards(JwtAuthGuard)
 @Controller('jobs')
 export class JobsController {
+  // 注入业务服务。
   constructor(private readonly jobs: JobsService) {}
 
   // Drizzle 返回的 bigint/date/json 等，转换为 Swagger 友好的 DTO（string/object）。
@@ -85,7 +86,7 @@ export class JobsController {
   }
 
   @Post(':id/confirm')
-  @ApiOperation({ summary: '确认执行结果', description: '用户确认结果并触发结算。' })
+  @ApiOperation({ summary: '确认执行结果（已废弃）', description: '当前版本由 Agent 提交结果直接结算，保留接口用于兼容。' })
   @ApiOkResponse({ type: JobDto })
   async confirm(
     @CurrentUser() user: CurrentUserType,

@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { WithdrawalStatus } from '../../common/enums';
 import { WalletBalanceDto } from './dto/wallet-balance.dto';
 import { WithdrawRequestDto } from './dto/withdraw-request.dto';
 import { WithdrawalDto } from './dto/withdrawal.dto';
@@ -15,6 +14,7 @@ import { GrantBalanceDto } from './dto/grant-balance.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('wallet')
 export class WalletController {
+  // 注入业务服务。
   constructor(private readonly wallet: WalletService) {}
 
   // 用户侧：查询自己的余额
@@ -43,23 +43,21 @@ export class WalletController {
   @Post('withdraw')
   @ApiOperation({ summary: '发起提现', description: '创建提现申请记录。' })
   @ApiOkResponse({ type: WithdrawalDto })
-  withdraw(@Body() _dto: WithdrawRequestDto): WithdrawalDto {
-    // Swagger 示例返回。
-    return {
-      id: '1',
-      amount: '5.00',
-      status: WithdrawalStatus.requested,
-      txHash: undefined,
-      requestedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+  // 发起提现：创建提现记录并扣减余额。
+  async withdraw(
+    @CurrentUser() user: CurrentUserType,
+    @Body() dto: WithdrawRequestDto,
+  ): Promise<WithdrawalDto> {
+    return this.wallet.requestWithdraw(user, dto.amount);
   }
 
   @Get('withdrawals')
   @ApiOperation({ summary: '提现列表', description: '返回提现记录列表。' })
   @ApiOkResponse({ type: [WithdrawalDto] })
-  listWithdrawals(): WithdrawalDto[] {
-    // Swagger 示例返回。
-    return [];
+  // 提现列表：仅返回当前用户的记录。
+  async listWithdrawals(
+    @CurrentUser() user: CurrentUserType,
+  ): Promise<WithdrawalDto[]> {
+    return this.wallet.listWithdrawals(user);
   }
 }

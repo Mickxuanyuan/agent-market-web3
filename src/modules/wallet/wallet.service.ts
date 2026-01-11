@@ -1,15 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import type { CurrentUser } from '../../common/auth/types';
-import { LedgerDirection, LedgerReason } from '../../common/enums';
+import { LedgerDirection, LedgerReason, WithdrawalStatus } from '../../common/enums';
 import { decimalToBigInt } from '../../common/money';
 import { DrizzleService } from '../../drizzle/drizzle.service';
-import { balances, ledgers } from '../../drizzle/schema';
+import { balances, ledgers, withdrawals } from '../../drizzle/schema';
 
 const ASSET_SYMBOL = 'platform';
 
 @Injectable()
 export class WalletService {
+  // 注入数据库访问服务。
   constructor(private readonly drizzle: DrizzleService) {}
 
   // 获取当前用户余额（available/frozen）。
@@ -93,5 +94,107 @@ export class WalletService {
 
       return row[0] ?? { available: '0', frozen: '0' };
     });
+  }
+
+  // 发起提现：校验余额并创建提现记录。
+  async requestWithdraw(user: CurrentUser, amount: string) {
+    let amountWei: bigint;
+    try {
+      amountWei = decimalToBigInt(amount);
+    } catch {
+      throw new BadRequestException('Invalid amount');
+    }
+    if (amountWei <= 0n) {
+      throw new BadRequestException('Amount must be positive');
+    }
+
+    const now = new Date();
+
+    return this.drizzle.db.transaction(async (tx) => {
+      await tx
+        .insert(balances)
+        .values({
+          userId: user.id,
+          available: '0',
+          frozen: '0',
+          updatedAt: now,
+        })
+        .onConflictDoNothing({ target: balances.userId });
+
+      const balanceRows = await tx
+        .select({ available: balances.available })
+        .from(balances)
+        .where(eq(balances.userId, user.id))
+        .limit(1);
+
+      const availableWei = decimalToBigInt(balanceRows[0]?.available ?? '0');
+      if (availableWei < amountWei) {
+        throw new BadRequestException('Insufficient balance');
+      }
+
+      const updated = await tx
+        .update(balances)
+        .set({
+          available: sql`${balances.available} - ${amount}`,
+          updatedAt: now,
+        })
+        .where(
+          sql`${balances.userId} = ${user.id} AND ${balances.available} >= ${amount}`,
+        )
+        .returning();
+
+      if (!updated[0]) {
+        throw new BadRequestException('Balance update failed');
+      }
+
+      const withdrawalRows = await tx
+        .insert(withdrawals)
+        .values({
+          userId: user.id,
+          amount,
+          status: WithdrawalStatus.requested,
+          requestedAt: now,
+          updatedAt: now,
+        })
+        .returning();
+
+      const withdrawal = withdrawalRows[0];
+
+      await tx.insert(ledgers).values({
+        userId: user.id,
+        direction: LedgerDirection.debit,
+        asset: ASSET_SYMBOL,
+        amount,
+        reason: LedgerReason.withdraw,
+        refId: withdrawal.id,
+      });
+
+      return {
+        id: withdrawal.id.toString(),
+        amount: withdrawal.amount,
+        status: withdrawal.status,
+        txHash: withdrawal.txHash ?? undefined,
+        requestedAt: withdrawal.requestedAt.toISOString(),
+        updatedAt: withdrawal.updatedAt.toISOString(),
+      };
+    });
+  }
+
+  // 提现列表：仅返回当前用户记录，按时间倒序。
+  async listWithdrawals(user: CurrentUser) {
+    const rows = await this.drizzle.db
+      .select()
+      .from(withdrawals)
+      .where(eq(withdrawals.userId, user.id))
+      .orderBy(desc(withdrawals.requestedAt));
+
+    return rows.map((row) => ({
+      id: row.id.toString(),
+      amount: row.amount,
+      status: row.status,
+      txHash: row.txHash ?? undefined,
+      requestedAt: row.requestedAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }));
   }
 }
