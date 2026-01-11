@@ -90,6 +90,15 @@ erDiagram
     BIGINT block_number
     TIMESTAMPTZ created_at
   }
+
+  AUTH_NONCES {
+    BIGINT id PK
+    VARCHAR wallet_address "钱包地址"
+    VARCHAR nonce "一次性口令"
+    TIMESTAMPTZ issued_at
+    TIMESTAMPTZ expires_at
+    TIMESTAMPTZ used_at "已使用时间"
+  }
 ```
 
 
@@ -198,6 +207,15 @@ Job 的结算记录（1:1）。
 - `payload_json`：事件原始数据。
 - `block_number`：区块号。
 - `created_at`：记录时间。
+
+### auth_nonces
+认证 nonce 记录（防重放）。
+- `id`：内部主键。
+- `wallet_address`：钱包地址（建议小写）。
+- `nonce`：一次性口令（唯一）。
+- `issued_at`：签发时间。
+- `expires_at`：过期时间。
+- `used_at`：使用时间（未使用时为空）。
 
 约束：
 - 组合唯一 `(chain_id, tx_hash, log_index)`，用于幂等。

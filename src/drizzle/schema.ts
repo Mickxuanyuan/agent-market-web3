@@ -59,6 +59,26 @@ export const users = pgTable(
   }),
 );
 
+export const authNonces = pgTable(
+  'auth_nonces',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    walletAddress: varchar('walletAddress', { length: 64 }).notNull(),
+    nonce: varchar('nonce', { length: 64 }).notNull(),
+    issuedAt: timestamp('issuedAt', { precision: 3, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp('expiresAt', { precision: 3, mode: 'date' }).notNull(),
+    usedAt: timestamp('usedAt', { precision: 3, mode: 'date' }),
+  },
+  (table) => ({
+    nonceKey: uniqueIndex('auth_nonces_nonce_key').on(table.nonce),
+    walletAddressIdx: index('auth_nonces_walletAddress_idx').on(
+      table.walletAddress,
+    ),
+  }),
+);
+
 export const balances = pgTable(
   'balances',
   {

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DrizzleModule } from './drizzle/drizzle.module';
+import { AuthModule } from './common/auth/auth.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { BillsModule } from './modules/bills/bills.module';
 import { JobsModule } from './modules/jobs/jobs.module';
@@ -12,6 +13,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DrizzleModule,
+    AuthModule,
     AgentsModule,
     JobsModule,
     BillsModule,

@@ -11,6 +11,10 @@
 - Drizzle ORM：类型安全的数据库访问层。
 - Drizzle Kit：迁移与 schema 生成工具。
 
+## 认证（MVP）
+- 认证流程：`nonce + 签名` 换取 JWT（请求携带 `Authorization: Bearer <token>`）。
+- 详情见 `docs/auth-flow.md`。
+
 ## Web3 连接（规划）
 - viem 或 ethers：链上交互与事件监听（后续接入）。
 
