@@ -8,8 +8,12 @@ import {
   Post,
   Query,
   UseGuards,
+  UnauthorizedException,
+  Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { JwtService } from '@nestjs/jwt';
+import type { Request } from 'express';
 import { AgentDto } from './dto/agent.dto';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
@@ -25,7 +29,51 @@ import { AgentStatus } from '../../common/enums';
 @Controller('agents')
 export class AgentsController {
   // 注入业务服务。
-  constructor(private readonly agents: AgentsService) {}
+  constructor(
+    private readonly agents: AgentsService,
+    private readonly jwt: JwtService,
+  ) {}
+
+  // 尝试解析可选的 Authorization Bearer token。
+  private async resolveUserFromAuthHeader(
+    authHeader: unknown,
+  ): Promise<CurrentUserType | null> {
+    if (authHeader === undefined) return null;
+    if (typeof authHeader !== 'string') {
+      throw new UnauthorizedException('Invalid Authorization header');
+    }
+    if (!authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Invalid Authorization header');
+    }
+
+    const token = authHeader.slice('Bearer '.length).trim();
+    if (!token) {
+      throw new UnauthorizedException('Missing Authorization token');
+    }
+
+    type JwtPayload = {
+      sub: string;
+      walletAddress: string;
+      iat?: number;
+      exp?: number;
+    };
+
+    let payload: JwtPayload;
+    try {
+      payload = await this.jwt.verifyAsync<JwtPayload>(token);
+    } catch {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    if (!payload?.sub || !payload.walletAddress) {
+      throw new UnauthorizedException('Invalid token payload');
+    }
+
+    return {
+      id: BigInt(payload.sub),
+      walletAddress: payload.walletAddress,
+    };
+  }
 
   // 解析页码参数，要求为 >= 1 的整数。
   private parsePage(value: string | undefined) {
@@ -167,18 +215,20 @@ export class AgentsController {
   }
 
   @Get(':id')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Agent 详情', description: '根据 ID 获取 Agent 详情。' })
+  @ApiOperation({ summary: 'Agent 详情', description: '根据 ID 获取 Agent 详情（公开）。' })
   @ApiOkResponse({ type: AgentDto })
   // 详情：ID 字符串统一转为 bigint 再查询。
   async findOne(
-    @CurrentUser() user: CurrentUserType,
+    @Req() request: Request,
     @Param('id') id: string,
   ): Promise<AgentDto> {
-    // 路由参数是 string，这里统一解析为 bigint（和 schema 一致）
-    const row = await this.agents.findOneOwned(user, parseIdAsBigInt(id));
-    return this.toDto(row);
+    const user = await this.resolveUserFromAuthHeader(
+      request.headers['authorization'],
+    );
+    const row = await this.agents.findOne(parseIdAsBigInt(id));
+    const isOwner = user && row.ownerUserId === user.id;
+    const safeRow = isOwner ? row : { ...row, url: '' };
+    return this.toDto(safeRow);
   }
 
   @Patch(':id')

@@ -92,6 +92,10 @@ export class JobsService {
         .values({
           userId: user.id,
           agentId,
+          title: dto.title,
+          category: dto.category,
+          description: dto.description,
+          expectedResult: dto.expectedResult,
           status: JobStatus.running,
           updatedAt: now,
         })
@@ -142,6 +146,10 @@ export class JobsService {
         jobUpdatedAt: jobs.updatedAt,
         jobUserId: jobs.userId,
         jobAgentId: jobs.agentId,
+        jobTitle: jobs.title,
+        jobCategory: jobs.category,
+        jobDescription: jobs.description,
+        jobExpectedResult: jobs.expectedResult,
         agentOwnerUserId: agents.ownerUserId,
       })
       .from(jobs)
@@ -159,6 +167,10 @@ export class JobsService {
         id: rows[0].jobId,
         userId: rows[0].jobUserId,
         agentId: rows[0].jobAgentId,
+        title: rows[0].jobTitle,
+        category: rows[0].jobCategory,
+        description: rows[0].jobDescription,
+        expectedResult: rows[0].jobExpectedResult,
         status: rows[0].jobStatus,
         resultText: rows[0].jobResultText,
         resultMetaJson: rows[0].jobResultMetaJson,

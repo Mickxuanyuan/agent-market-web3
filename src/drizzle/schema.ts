@@ -128,6 +128,10 @@ export const jobs = pgTable(
     agentId: bigint('agentId', { mode: 'bigint' })
       .notNull()
       .references(() => agents.id),
+    title: varchar('title', { length: 120 }).notNull(),
+    category: varchar('category', { length: 80 }).notNull(),
+    description: text('description').notNull(),
+    expectedResult: text('expectedResult').notNull(),
     status: jobStatusEnum('status').notNull().default('open'),
     resultText: text('resultText'),
     resultMetaJson: jsonb('resultMetaJson'),

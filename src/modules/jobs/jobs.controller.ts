@@ -22,6 +22,10 @@ export class JobsController {
     id: bigint;
     userId: bigint;
     agentId: bigint;
+    title: string;
+    category: string;
+    description: string;
+    expectedResult: string;
     status: string;
     resultText: string | null;
     resultMetaJson: unknown;
@@ -32,6 +36,10 @@ export class JobsController {
       id: row.id.toString(),
       userId: row.userId.toString(),
       agentId: row.agentId.toString(),
+      title: row.title,
+      category: row.category,
+      description: row.description,
+      expectedResult: row.expectedResult,
       status: row.status as JobDto['status'],
       resultText: row.resultText ?? undefined,
       resultMetaJson:

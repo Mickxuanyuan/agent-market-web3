@@ -22,6 +22,10 @@ describe('JobsService', () => {
       jobUpdatedAt: new Date(),
       jobUserId: 2n,
       jobAgentId: 3n,
+      jobTitle: 'Title',
+      jobCategory: 'Category',
+      jobDescription: 'Desc',
+      jobExpectedResult: 'Expect',
       agentOwnerUserId: 5n,
     };
 
