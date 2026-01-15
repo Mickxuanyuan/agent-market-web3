@@ -134,7 +134,7 @@ export class JobsService {
 
   // Agent 提交结果：
   // 只有该 job 对应 agent 的 owner 才能提交（MVP：认为 owner 就是 agent 执行者）
-  // 当前版本直接完成结算：job.status -> completed（跳过 pending_review）。
+  // 当前版本只进入待确认状态：job.status -> pending_review。
   async submitResult(user: CurrentUser, jobId: bigint, dto: SubmitResultDto) {
     const rows = await this.drizzle.db
       .select({
@@ -179,6 +179,21 @@ export class JobsService {
       };
     }
 
+    if (rows[0].jobStatus === JobStatus.pendingReview) {
+      const now = new Date();
+      const updatedJobs = await this.drizzle.db
+        .update(jobs)
+        .set({
+          resultText: dto.resultText,
+          resultMetaJson: dto.resultMetaJson,
+          updatedAt: now,
+        })
+        .where(eq(jobs.id, jobId))
+        .returning();
+
+      return updatedJobs[0] ?? rows[0];
+    }
+
     if (
       rows[0].jobStatus !== JobStatus.open &&
       rows[0].jobStatus !== JobStatus.running
@@ -188,11 +203,11 @@ export class JobsService {
 
     const now = new Date();
     return this.drizzle.db.transaction(async (tx) => {
-      // 1) 写入执行结果并将 job 直接完成
+      // 1) 写入执行结果并进入待确认状态
       const updatedJobs = await tx
         .update(jobs)
         .set({
-          status: JobStatus.completed,
+          status: JobStatus.pendingReview,
           resultText: dto.resultText,
           resultMetaJson: dto.resultMetaJson,
           updatedAt: now,
@@ -202,7 +217,44 @@ export class JobsService {
 
       const jobRow = updatedJobs[0];
 
-      // 2) 读取账单并校验状态
+      return jobRow;
+    });
+  }
+
+  // 用户确认结果并结算：
+  // 由 job 创建者调用，完成“冻结余额扣除 + 转给 agent”。
+  async confirm(user: CurrentUser, jobId: bigint) {
+    const rows = await this.drizzle.db
+      .select({
+        jobId: jobs.id,
+        jobStatus: jobs.status,
+        jobUserId: jobs.userId,
+        jobAgentId: jobs.agentId,
+        jobTitle: jobs.title,
+        jobCategory: jobs.category,
+        jobDescription: jobs.description,
+        jobExpectedResult: jobs.expectedResult,
+        jobResultText: jobs.resultText,
+        jobResultMetaJson: jobs.resultMetaJson,
+        jobCreatedAt: jobs.createdAt,
+        jobUpdatedAt: jobs.updatedAt,
+        agentOwnerUserId: agents.ownerUserId,
+      })
+      .from(jobs)
+      .innerJoin(agents, eq(jobs.agentId, agents.id))
+      .where(and(eq(jobs.id, jobId), eq(jobs.userId, user.id)))
+      .limit(1);
+    if (!rows[0]) throw new NotFoundException('Job not found');
+
+    if (rows[0].jobStatus === JobStatus.completed) {
+      return rows[0];
+    }
+    if (rows[0].jobStatus !== JobStatus.pendingReview) {
+      throw new BadRequestException('Job is not ready to confirm');
+    }
+
+    const now = new Date();
+    return this.drizzle.db.transaction(async (tx) => {
       const billRows = await tx
         .select({
           billId: bills.id,
@@ -218,19 +270,28 @@ export class JobsService {
         throw new NotFoundException('Bill not found');
       }
       if (bill.billStatus === BillStatus.released) {
-        return jobRow;
+        return rows[0];
       }
       if (bill.billStatus !== BillStatus.locked) {
         throw new BadRequestException('Bill is not locked');
       }
 
-      // 3) 释放账单
+      const updatedJobs = await tx
+        .update(jobs)
+        .set({
+          status: JobStatus.completed,
+          updatedAt: now,
+        })
+        .where(eq(jobs.id, jobId))
+        .returning();
+
+      const jobRow = updatedJobs[0];
+
       await tx
         .update(bills)
         .set({ status: BillStatus.released, releasedAt: now })
         .where(eq(bills.id, bill.billId));
 
-      // 4) 从创建者冻结余额扣除
       await tx
         .update(balances)
         .set({
@@ -239,7 +300,6 @@ export class JobsService {
         })
         .where(eq(balances.userId, rows[0].jobUserId));
 
-      // 5) 确保 agentOwner 的 balances 行存在
       await tx
         .insert(balances)
         .values({
@@ -250,7 +310,6 @@ export class JobsService {
         })
         .onConflictDoNothing({ target: balances.userId });
 
-      // 6) 增加 agentOwner 可用余额
       await tx
         .update(balances)
         .set({
@@ -259,7 +318,6 @@ export class JobsService {
         })
         .where(eq(balances.userId, rows[0].agentOwnerUserId));
 
-      // 7) 记流水（用于审计/对账）
       await tx.insert(ledgers).values([
         {
           userId: rows[0].jobUserId,
@@ -281,17 +339,5 @@ export class JobsService {
 
       return jobRow;
     });
-  }
-
-  // 用户确认结果并结算（已废弃）：
-  // 当前版本由 submitResult 直接完成结算，保留此接口做兼容。
-  async confirm(user: CurrentUser, jobId: bigint) {
-    const rows = await this.drizzle.db
-      .select()
-      .from(jobs)
-      .where(and(eq(jobs.id, jobId), eq(jobs.userId, user.id)))
-      .limit(1);
-    if (!rows[0]) throw new NotFoundException('Job not found');
-    return rows[0];
   }
 }

@@ -93,6 +93,7 @@ Nonce: f3a1c2...
 
 字段：
 - `id`：提现记录 ID（string，BIGINT 字符串）
+- `type`：记录类型（withdraw/deposit）
 - `amount`：提现金额（string，平台币）
 - `status`：提现状态（requested/sent/confirmed/failed）
 - `txHash`：链上交易哈希（string，可空）
@@ -103,6 +104,7 @@ Nonce: f3a1c2...
 ```json
 {
   "id": "10",
+  "type": "withdraw",
   "amount": "5.00",
   "status": "requested",
   "txHash": "",
@@ -140,11 +142,45 @@ Nonce: f3a1c2...
   - 类型：string
   - 必填：是
   - 约束：必须为正数（不允许负数或 0）
+- `to`：接收 USDT 的地址（业务端固定为当前用户）
+  - 类型：string
+  - 必填：否
+- `txHash`：链上交易哈希（前端签名交易后回传）
+  - 类型：string
+  - 必填：否（后端代发时可由后端填）
 
 返回：
 - `id`：提现记录 ID
+- `type`：记录类型（withdraw）
 - `amount`：提现金额
 - `status`：提现状态（requested/sent/confirmed/failed）
+- `txHash`：链上交易哈希（可空）
+- `requestedAt`：申请时间
+- `updatedAt`：更新时间
+
+### POST /wallet/deposit
+发起充值申请。
+
+认证：
+- `Authorization: Bearer <JWT>`
+
+请求：
+- `amount`：充值金额（字符串）
+  - 类型：string
+  - 必填：是
+  - 约束：必须为正数（不允许负数或 0）
+- `to`：接收 APT 的地址（业务端固定为当前用户）
+  - 类型：string
+  - 必填：否
+- `txHash`：链上交易哈希（前端签名交易后回传）
+  - 类型：string
+  - 必填：否（后端代发时可由后端填）
+
+返回：
+- `id`：充值记录 ID
+- `type`：记录类型（deposit）
+- `amount`：充值金额
+- `status`：充值状态（requested/sent/confirmed/failed）
 - `txHash`：链上交易哈希（可空）
 - `requestedAt`：申请时间
 - `updatedAt`：更新时间

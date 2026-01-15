@@ -12,8 +12,8 @@ function createInsertChain(returningRows: unknown[]) {
 }
 
 describe('ChainEventsService', () => {
-  // 提现确认事件写入成功时应更新提现状态。
-  it('handleWithdrawConfirmed 插入成功应更新提现', async () => {
+  // 提现事件写入成功时应更新提现状态。
+  it('handleWithdrawn 插入成功应更新提现', async () => {
     const drizzle = {
       db: {
         insert: jest.fn().mockReturnValue(createInsertChain([{ id: 1n }])),
@@ -25,7 +25,7 @@ describe('ChainEventsService', () => {
     };
 
     const service = new ChainEventsService(drizzle as never);
-    await (service as any).handleWithdrawConfirmed(
+    await (service as any).handleWithdrawn(
       {
         chainId: 11155111,
         rpcUrl: 'http://localhost',
@@ -34,7 +34,7 @@ describe('ChainEventsService', () => {
         pollIntervalMs: 1000,
       },
       {
-        args: { withdrawalId: 1n, txHash: '0xabc' },
+        args: { user: '0xabc', to: '0xdef', amount: 1000000000000000000n },
         blockNumber: 10n,
         transactionHash: '0xabc',
         logIndex: 1,
@@ -44,8 +44,8 @@ describe('ChainEventsService', () => {
     expect(drizzle.db.update).toHaveBeenCalled();
   });
 
-  // 提现确认事件重复写入时不应更新提现状态。
-  it('handleWithdrawConfirmed 重复事件应跳过更新', async () => {
+  // 提现事件重复写入时不应更新提现状态。
+  it('handleWithdrawn 重复事件应跳过更新', async () => {
     const drizzle = {
       db: {
         insert: jest.fn().mockReturnValue(createInsertChain([])),
@@ -54,7 +54,7 @@ describe('ChainEventsService', () => {
     };
 
     const service = new ChainEventsService(drizzle as never);
-    await (service as any).handleWithdrawConfirmed(
+    await (service as any).handleWithdrawn(
       {
         chainId: 11155111,
         rpcUrl: 'http://localhost',
@@ -63,7 +63,7 @@ describe('ChainEventsService', () => {
         pollIntervalMs: 1000,
       },
       {
-        args: { withdrawalId: 1n, txHash: '0xabc' },
+        args: { user: '0xabc', to: '0xdef', amount: 1000000000000000000n },
         blockNumber: 10n,
         transactionHash: '0xabc',
         logIndex: 1,

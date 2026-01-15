@@ -22,6 +22,11 @@ export enum WithdrawalStatus {
   failed = 'failed',
 }
 
+export enum WalletTxType {
+  deposit = 'deposit',
+  withdraw = 'withdraw',
+}
+
 export enum LedgerDirection {
   credit = 'credit',
   debit = 'debit',

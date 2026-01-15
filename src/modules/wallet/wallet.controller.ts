@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import { WalletBalanceDto } from './dto/wallet-balance.dto';
 import { WithdrawRequestDto } from './dto/withdraw-request.dto';
 import { WithdrawalDto } from './dto/withdrawal.dto';
+import { DepositRequestDto } from './dto/deposit-request.dto';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { CurrentUser as CurrentUserType } from '../../common/auth/types';
@@ -48,7 +49,18 @@ export class WalletController {
     @CurrentUser() user: CurrentUserType,
     @Body() dto: WithdrawRequestDto,
   ): Promise<WithdrawalDto> {
-    return this.wallet.requestWithdraw(user, dto.amount);
+    return this.wallet.requestWithdraw(user, dto.amount, dto.txHash);
+  }
+
+  @Post('deposit')
+  @ApiOperation({ summary: '发起充值', description: '创建充值申请记录。' })
+  @ApiOkResponse({ type: WithdrawalDto })
+  // 发起充值：创建充值记录，等待链上确认后入账。
+  async deposit(
+    @CurrentUser() user: CurrentUserType,
+    @Body() dto: DepositRequestDto,
+  ): Promise<WithdrawalDto> {
+    return this.wallet.requestDeposit(user, dto.amount, dto.txHash);
   }
 
   @Get('withdrawals')

@@ -94,7 +94,10 @@ export class JobsController {
   }
 
   @Post(':id/confirm')
-  @ApiOperation({ summary: '确认执行结果（已废弃）', description: '当前版本由 Agent 提交结果直接结算，保留接口用于兼容。' })
+  @ApiOperation({
+    summary: '确认执行结果并结算',
+    description: '用户确认结果后释放冻结余额并完成结算。',
+  })
   @ApiOkResponse({ type: JobDto })
   async confirm(
     @CurrentUser() user: CurrentUserType,

@@ -43,6 +43,8 @@ export const ledgerReasonEnum = pgEnum('LedgerReason', [
   'burn',
 ]);
 
+export const walletTxTypeEnum = pgEnum('WalletTxType', ['deposit', 'withdraw']);
+
 export const users = pgTable(
   'users',
   {
@@ -197,6 +199,7 @@ export const withdrawals = pgTable(
     userId: bigint('userId', { mode: 'bigint' })
       .notNull()
       .references(() => users.id),
+    type: walletTxTypeEnum('type').notNull().default('withdraw'),
     amount: numeric('amount', { precision: 36, scale: 18 }).notNull(),
     status: withdrawalStatusEnum('status').notNull().default('requested'),
     txHash: varchar('txHash', { length: 66 }),

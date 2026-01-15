@@ -7,9 +7,15 @@ import {
 import { createPublicClient, http, parseAbiItem } from 'viem';
 import type { PublicClient } from 'viem';
 import { DrizzleService } from '../../drizzle/drizzle.service';
-import { chainEvents, withdrawals } from '../../drizzle/schema';
-import { eq } from 'drizzle-orm';
-import { WithdrawalStatus } from '../../common/enums';
+import { balances, chainEvents, ledgers, users, withdrawals } from '../../drizzle/schema';
+import { and, eq, sql } from 'drizzle-orm';
+import {
+  LedgerDirection,
+  LedgerReason,
+  WalletTxType,
+  WithdrawalStatus,
+} from '../../common/enums';
+import { bigIntToDecimal } from '../../common/money';
 
 type ChainConfig = {
   chainId: number;
@@ -99,33 +105,33 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
       const fromBlock = this.lastProcessedBlock + 1n;
       const toBlock = latestBlock;
 
-      const withdrawConfirmedAbi = parseAbiItem(
-        'event WithdrawConfirmed(uint256 withdrawalId, bytes32 txHash)',
+      const depositedAbi = parseAbiItem(
+        'event Deposited(address indexed user, address indexed to, uint256 amount)',
       );
-      const withdrawFailedAbi = parseAbiItem(
-        'event WithdrawFailed(uint256 withdrawalId, string reason)',
+      const withdrawnAbi = parseAbiItem(
+        'event Withdrawn(address indexed user, address indexed to, uint256 amount)',
       );
 
-      const [confirmedLogs, failedLogs] = await Promise.all([
+      const [depositedLogs, withdrawnLogs] = await Promise.all([
         this.client.getLogs({
           address: config.contractAddress,
           fromBlock,
           toBlock,
-          event: withdrawConfirmedAbi,
+          event: depositedAbi,
         }),
         this.client.getLogs({
           address: config.contractAddress,
           fromBlock,
           toBlock,
-          event: withdrawFailedAbi,
+          event: withdrawnAbi,
         }),
       ]);
 
-      for (const log of confirmedLogs) {
-        await this.handleWithdrawConfirmed(config, log);
+      for (const log of depositedLogs) {
+        await this.handleDeposited(config, log);
       }
-      for (const log of failedLogs) {
-        await this.handleWithdrawFailed(config, log);
+      for (const log of withdrawnLogs) {
+        await this.handleWithdrawn(config, log);
       }
 
       this.lastProcessedBlock = toBlock;
@@ -134,18 +140,22 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // 处理提现确认事件：写入 chain_events 并更新提现状态。
-  private async handleWithdrawConfirmed(
+  // 处理充值事件：写入 chain_events，并在确认后入账。
+  private async handleDeposited(
     config: ChainConfig,
     log: {
-      args: { withdrawalId?: bigint; txHash?: `0x${string}` };
+      args: { user?: `0x${string}`; to?: `0x${string}`; amount?: bigint };
       blockNumber: bigint;
       transactionHash: `0x${string}`;
       logIndex: number;
     },
   ) {
-    const withdrawalId = log.args.withdrawalId;
-    if (!withdrawalId) return;
+    const userAddress = log.args.user?.toLowerCase();
+    const amountRaw = log.args.amount;
+    if (!userAddress || amountRaw === undefined) return;
+
+    const amount = bigIntToDecimal(amountRaw);
+    const now = new Date();
 
     const inserted = await this.drizzle.db
       .insert(chainEvents)
@@ -153,13 +163,124 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
         chainId: BigInt(config.chainId),
         txHash: log.transactionHash,
         logIndex: log.logIndex,
-        eventType: 'WithdrawConfirmed',
+        eventType: 'Deposited',
         payloadJson: {
-          withdrawalId: withdrawalId.toString(),
-          txHash: log.args.txHash ?? log.transactionHash,
+          user: userAddress,
+          to: log.args.to?.toLowerCase() ?? '',
+          amount,
         },
         blockNumber: log.blockNumber,
-        createdAt: new Date(),
+        createdAt: now,
+      })
+      .onConflictDoNothing()
+      .returning({ id: chainEvents.id });
+
+    if (!inserted[0]) return;
+
+    const userRows = await this.drizzle.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.walletAddress, userAddress))
+      .limit(1);
+
+    const user = userRows[0];
+    if (!user) return;
+
+    await this.drizzle.db.transaction(async (tx) => {
+      await tx
+        .insert(balances)
+        .values({
+          userId: user.id,
+          available: '0',
+          frozen: '0',
+          updatedAt: now,
+        })
+        .onConflictDoNothing({ target: balances.userId });
+
+      const updatedRows = await tx
+        .update(withdrawals)
+        .set({
+          status: WithdrawalStatus.confirmed,
+          txHash: log.transactionHash,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(withdrawals.txHash, log.transactionHash),
+            eq(withdrawals.type, WalletTxType.deposit),
+          ),
+        )
+        .returning({ id: withdrawals.id });
+
+      let depositId = updatedRows[0]?.id;
+      if (!depositId) {
+        const insertedRows = await tx
+          .insert(withdrawals)
+          .values({
+            userId: user.id,
+            type: WalletTxType.deposit,
+            amount,
+            status: WithdrawalStatus.confirmed,
+            txHash: log.transactionHash,
+            requestedAt: now,
+            updatedAt: now,
+          })
+          .returning({ id: withdrawals.id });
+        depositId = insertedRows[0]?.id;
+      }
+
+      await tx
+        .update(balances)
+        .set({
+          available: sql`${balances.available} + ${amount}`,
+          updatedAt: now,
+        })
+        .where(eq(balances.userId, user.id));
+
+      if (depositId) {
+        await tx.insert(ledgers).values({
+          userId: user.id,
+          direction: LedgerDirection.credit,
+          asset: 'platform',
+          amount,
+          reason: LedgerReason.deposit,
+          refId: depositId,
+        });
+      }
+    });
+  }
+
+  // 处理提现事件：写入 chain_events 并更新提现状态。
+  private async handleWithdrawn(
+    config: ChainConfig,
+    log: {
+      args: { user?: `0x${string}`; to?: `0x${string}`; amount?: bigint };
+      blockNumber: bigint;
+      transactionHash: `0x${string}`;
+      logIndex: number;
+    },
+  ) {
+    const userAddress = log.args.user?.toLowerCase();
+    const amountRaw = log.args.amount;
+    if (!userAddress || amountRaw === undefined) return;
+
+    const amount = bigIntToDecimal(amountRaw);
+    const now = new Date();
+
+    const inserted = await this.drizzle.db
+      .insert(chainEvents)
+      .values({
+        chainId: BigInt(config.chainId),
+        txHash: log.transactionHash,
+        logIndex: log.logIndex,
+        eventType: 'Withdrawn',
+        payloadJson: {
+          user: userAddress,
+          to: log.args.to?.toLowerCase() ?? '',
+          amount,
+        },
+        blockNumber: log.blockNumber,
+        createdAt: now,
       })
       .onConflictDoNothing()
       .returning({ id: chainEvents.id });
@@ -170,50 +291,14 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
       .update(withdrawals)
       .set({
         status: WithdrawalStatus.confirmed,
-        txHash: log.args.txHash ?? log.transactionHash,
-        updatedAt: new Date(),
-      })
-      .where(eq(withdrawals.id, withdrawalId));
-  }
-
-  // 处理提现失败事件：写入 chain_events 并更新提现状态。
-  private async handleWithdrawFailed(
-    config: ChainConfig,
-    log: {
-      args: { withdrawalId?: bigint; reason?: string };
-      blockNumber: bigint;
-      transactionHash: `0x${string}`;
-      logIndex: number;
-    },
-  ) {
-    const withdrawalId = log.args.withdrawalId;
-    if (!withdrawalId) return;
-
-    const inserted = await this.drizzle.db
-      .insert(chainEvents)
-      .values({
-        chainId: BigInt(config.chainId),
         txHash: log.transactionHash,
-        logIndex: log.logIndex,
-        eventType: 'WithdrawFailed',
-        payloadJson: {
-          withdrawalId: withdrawalId.toString(),
-          reason: log.args.reason ?? '',
-        },
-        blockNumber: log.blockNumber,
-        createdAt: new Date(),
+        updatedAt: now,
       })
-      .onConflictDoNothing()
-      .returning({ id: chainEvents.id });
-
-    if (!inserted[0]) return;
-
-    await this.drizzle.db
-      .update(withdrawals)
-      .set({
-        status: WithdrawalStatus.failed,
-        updatedAt: new Date(),
-      })
-      .where(eq(withdrawals.id, withdrawalId));
+      .where(
+        and(
+          eq(withdrawals.txHash, log.transactionHash),
+          eq(withdrawals.type, WalletTxType.withdraw),
+        ),
+      );
   }
 }

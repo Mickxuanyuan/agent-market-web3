@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNumberString, IsOptional, IsString } from 'class-validator';
 
-export class WithdrawRequestDto {
-  @ApiProperty({ example: '5.00', description: '提现金额（平台币）' })
+export class DepositRequestDto {
+  @ApiProperty({ example: '5.00', description: '充值金额（平台币）' })
   @IsNumberString()
   amount: string;
 

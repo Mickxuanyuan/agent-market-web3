@@ -9,7 +9,11 @@ export function decimalToBigInt(value: string, scale: bigint = DEFAULT_SCALE) {
 
   const negative = trimmed.startsWith('-');
   const unsigned = negative ? trimmed.slice(1) : trimmed;
-  const [whole = '0', fraction = ''] = unsigned.split('.');
+  const parts = unsigned.split('.');
+  if (parts.length > 2) {
+    throw new Error('Invalid decimal');
+  }
+  const [whole = '0', fraction = ''] = parts;
 
   if (!/^\d+$/.test(whole) || (fraction && !/^\d+$/.test(fraction))) {
     throw new Error('Invalid decimal');
@@ -23,4 +27,23 @@ export function decimalToBigInt(value: string, scale: bigint = DEFAULT_SCALE) {
 
   const asInt = BigInt(whole || '0') * 10n ** scale + BigInt(paddedFraction);
   return negative ? -asInt : asInt;
+}
+
+// 将定点整数（BigInt）转回十进制字符串。
+// - scale 默认 18：对应 DECIMAL(36,18)
+// - 用于把链上 uint256 金额写回数据库的数值字段
+export function bigIntToDecimal(value: bigint, scale: bigint = DEFAULT_SCALE) {
+  const negative = value < 0n;
+  const abs = negative ? -value : value;
+  const base = 10n ** scale;
+  const whole = abs / base;
+  const fraction = abs % base;
+
+  if (fraction === 0n) {
+    return `${negative ? '-' : ''}${whole.toString()}`;
+  }
+
+  const padded = fraction.toString().padStart(Number(scale), '0');
+  const trimmed = padded.replace(/0+$/, '');
+  return `${negative ? '-' : ''}${whole.toString()}.${trimmed}`;
 }

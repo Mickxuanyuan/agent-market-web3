@@ -1,4 +1,4 @@
-import { decimalToBigInt } from './money';
+import { bigIntToDecimal, decimalToBigInt } from './money';
 
 describe('decimalToBigInt', () => {
   it('应转换为定点整数', () => {
@@ -15,5 +15,15 @@ describe('decimalToBigInt', () => {
     expect(() => decimalToBigInt('')).toThrow();
     expect(() => decimalToBigInt('abc')).toThrow();
     expect(() => decimalToBigInt('1.2.3')).toThrow();
+  });
+});
+
+describe('bigIntToDecimal', () => {
+  it('formats whole numbers', () => {
+    expect(bigIntToDecimal(1000000000000000000n)).toBe('1');
+  });
+
+  it('formats fractional numbers', () => {
+    expect(bigIntToDecimal(1230000000000000000n)).toBe('1.23');
   });
 });

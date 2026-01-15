@@ -1,9 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { WithdrawalStatus } from '../../../common/enums';
+import { WalletTxType, WithdrawalStatus } from '../../../common/enums';
 
 export class WithdrawalDto {
   @ApiProperty({ example: '1', description: '提现记录 ID' })
   id: string;
+
+  @ApiProperty({
+    enum: WalletTxType,
+    example: WalletTxType.withdraw,
+    description: '记录类型',
+  })
+  type: WalletTxType;
 
   @ApiProperty({ example: '5.00', description: '提现金额（平台币）' })
   amount: string;

@@ -22,6 +22,7 @@ function createTxMocks(options: {
             returning: jest.fn().mockResolvedValue([
               {
                 id: 1n,
+                type: 'withdraw',
                 amount: '5.00',
                 status: 'requested',
                 txHash: null,

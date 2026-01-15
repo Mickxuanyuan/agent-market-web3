@@ -1,7 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { desc, eq, sql } from 'drizzle-orm';
 import type { CurrentUser } from '../../common/auth/types';
-import { LedgerDirection, LedgerReason, WithdrawalStatus } from '../../common/enums';
+import {
+  LedgerDirection,
+  LedgerReason,
+  WalletTxType,
+  WithdrawalStatus,
+} from '../../common/enums';
 import { decimalToBigInt } from '../../common/money';
 import { DrizzleService } from '../../drizzle/drizzle.service';
 import { balances, ledgers, withdrawals } from '../../drizzle/schema';
@@ -97,7 +102,7 @@ export class WalletService {
   }
 
   // 发起提现：校验余额并创建提现记录。
-  async requestWithdraw(user: CurrentUser, amount: string) {
+  async requestWithdraw(user: CurrentUser, amount: string, txHash?: string) {
     let amountWei: bigint;
     try {
       amountWei = decimalToBigInt(amount);
@@ -151,8 +156,10 @@ export class WalletService {
         .insert(withdrawals)
         .values({
           userId: user.id,
+          type: WalletTxType.withdraw,
           amount,
           status: WithdrawalStatus.requested,
+          txHash: txHash ?? null,
           requestedAt: now,
           updatedAt: now,
         })
@@ -171,6 +178,7 @@ export class WalletService {
 
       return {
         id: withdrawal.id.toString(),
+        type: withdrawal.type as WalletTxType,
         amount: withdrawal.amount,
         status: withdrawal.status,
         txHash: withdrawal.txHash ?? undefined,
@@ -178,6 +186,45 @@ export class WalletService {
         updatedAt: withdrawal.updatedAt.toISOString(),
       };
     });
+  }
+
+  // 发起充值：创建充值记录，等待链上确认后再入账。
+  async requestDeposit(user: CurrentUser, amount: string, txHash?: string) {
+    let amountWei: bigint;
+    try {
+      amountWei = decimalToBigInt(amount);
+    } catch {
+      throw new BadRequestException('Invalid amount');
+    }
+    if (amountWei <= 0n) {
+      throw new BadRequestException('Amount must be positive');
+    }
+
+    const now = new Date();
+
+    const rows = await this.drizzle.db
+      .insert(withdrawals)
+      .values({
+        userId: user.id,
+        type: WalletTxType.deposit,
+        amount,
+        status: WithdrawalStatus.requested,
+        txHash: txHash ?? null,
+        requestedAt: now,
+        updatedAt: now,
+      })
+      .returning();
+
+    const deposit = rows[0];
+    return {
+      id: deposit.id.toString(),
+      type: deposit.type as WalletTxType,
+      amount: deposit.amount,
+      status: deposit.status,
+      txHash: deposit.txHash ?? undefined,
+      requestedAt: deposit.requestedAt.toISOString(),
+      updatedAt: deposit.updatedAt.toISOString(),
+    };
   }
 
   // 提现列表：仅返回当前用户记录，按时间倒序。
@@ -190,6 +237,7 @@ export class WalletService {
 
     return rows.map((row) => ({
       id: row.id.toString(),
+      type: row.type as WalletTxType,
       amount: row.amount,
       status: row.status,
       txHash: row.txHash ?? undefined,
