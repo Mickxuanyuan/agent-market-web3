@@ -4,6 +4,11 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 PRIVATE_KEY="${TEST_PRIVATE_KEY:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/../.env"
+
+if [[ -f "${ENV_FILE}" ]]; then
+  PRIVATE_KEY="$(node -e "require('dotenv').config({ path: '${ENV_FILE}' }); process.stdout.write(process.env.TEST_PRIVATE_KEY || '')")"
+fi
 
 if [[ -z "${PRIVATE_KEY}" ]]; then
   echo "Missing TEST_PRIVATE_KEY env var" >&2
