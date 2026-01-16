@@ -15,6 +15,13 @@
       "when": 1768016026046,
       "tag": "0001_bitter_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768533144393,
+      "tag": "0002_round_lenny_balinger",
+      "breakpoints": true
     }
   ]
 }

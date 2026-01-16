@@ -4,11 +4,11 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { createPublicClient, http, parseAbiItem } from 'viem';
+import { createPublicClient, decodeEventLog, http, parseAbiItem } from 'viem';
 import type { PublicClient } from 'viem';
 import { DrizzleService } from '../../drizzle/drizzle.service';
 import { balances, chainEvents, ledgers, users, withdrawals } from '../../drizzle/schema';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import {
   LedgerDirection,
   LedgerReason,
@@ -47,6 +47,9 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
       transport: http(config.rpcUrl),
     });
     this.lastProcessedBlock = config.startBlock - 1n;
+    this.logger.log(
+      `链上事件同步启用: chainId=${config.chainId}, address=${config.contractAddress}, startBlock=${config.startBlock.toString()}`,
+    );
 
     await this.pollOnce(config);
 
@@ -126,6 +129,9 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
           event: withdrawnAbi,
         }),
       ]);
+      this.logger.log(
+        `事件扫描: ${fromBlock.toString()} -> ${toBlock.toString()} (deposited=${depositedLogs.length}, withdrawn=${withdrawnLogs.length})`,
+      );
 
       for (const log of depositedLogs) {
         await this.handleDeposited(config, log);
@@ -133,6 +139,8 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
       for (const log of withdrawnLogs) {
         await this.handleWithdrawn(config, log);
       }
+
+      await this.handlePendingReceipts(config);
 
       this.lastProcessedBlock = toBlock;
     } catch (error) {
@@ -175,7 +183,10 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
       .onConflictDoNothing()
       .returning({ id: chainEvents.id });
 
-    if (!inserted[0]) return;
+    const eventInserted = Boolean(inserted[0]);
+    if (!eventInserted) {
+      this.logger.warn(`事件已存在，继续尝试修复状态: ${log.transactionHash}`);
+    }
 
     const userRows = await this.drizzle.db
       .select({ id: users.id })
@@ -184,7 +195,10 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
       .limit(1);
 
     const user = userRows[0];
-    if (!user) return;
+    if (!user) {
+      this.logger.warn(`未找到用户: ${userAddress}`);
+      return;
+    }
 
     await this.drizzle.db.transaction(async (tx) => {
       await tx
@@ -197,23 +211,39 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
         })
         .onConflictDoNothing({ target: balances.userId });
 
-      const updatedRows = await tx
-        .update(withdrawals)
-        .set({
-          status: WithdrawalStatus.confirmed,
-          txHash: log.transactionHash,
-          updatedAt: now,
-        })
+      const existingRows = await tx
+        .select({ id: withdrawals.id, status: withdrawals.status })
+        .from(withdrawals)
         .where(
           and(
             eq(withdrawals.txHash, log.transactionHash),
             eq(withdrawals.type, WalletTxType.deposit),
           ),
         )
-        .returning({ id: withdrawals.id });
+        .limit(1);
 
-      let depositId = updatedRows[0]?.id;
-      if (!depositId) {
+      const existing = existingRows[0];
+      if (existing?.status === WithdrawalStatus.confirmed) {
+        return;
+      }
+
+      let depositId: bigint | undefined;
+      if (existing) {
+        const updatedRows = await tx
+          .update(withdrawals)
+          .set({
+            status: WithdrawalStatus.confirmed,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(withdrawals.id, existing.id),
+              eq(withdrawals.status, WithdrawalStatus.requested),
+            ),
+          )
+          .returning({ id: withdrawals.id });
+        depositId = updatedRows[0]?.id;
+      } else {
         const insertedRows = await tx
           .insert(withdrawals)
           .values({
@@ -227,6 +257,10 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
           })
           .returning({ id: withdrawals.id });
         depositId = insertedRows[0]?.id;
+      }
+
+      if (!depositId) {
+        return;
       }
 
       await tx
@@ -285,7 +319,9 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
       .onConflictDoNothing()
       .returning({ id: chainEvents.id });
 
-    if (!inserted[0]) return;
+    if (!inserted[0]) {
+      this.logger.warn(`事件已存在，继续尝试修复状态: ${log.transactionHash}`);
+    }
 
     await this.drizzle.db
       .update(withdrawals)
@@ -298,7 +334,103 @@ export class ChainEventsService implements OnModuleInit, OnModuleDestroy {
         and(
           eq(withdrawals.txHash, log.transactionHash),
           eq(withdrawals.type, WalletTxType.withdraw),
+          eq(withdrawals.status, WithdrawalStatus.requested),
         ),
       );
+  }
+
+  // 兜底：按 txHash 拉取交易回执，避免事件漏收。
+  private async handlePendingReceipts(config: ChainConfig) {
+    if (!this.client) return;
+
+    const pendingRows = await this.drizzle.db
+      .select({ txHash: withdrawals.txHash })
+      .from(withdrawals)
+      .where(
+        and(
+          eq(withdrawals.status, WithdrawalStatus.requested),
+          isNotNull(withdrawals.txHash),
+        ),
+      )
+      .limit(50);
+
+    if (pendingRows.length === 0) return;
+    this.logger.log(`回执兜底: pending=${pendingRows.length}`);
+
+    const depositedAbi = parseAbiItem(
+      'event Deposited(address indexed user, address indexed to, uint256 amount)',
+    );
+    const withdrawnAbi = parseAbiItem(
+      'event Withdrawn(address indexed user, address indexed to, uint256 amount)',
+    );
+
+    for (const row of pendingRows) {
+      const txHash = row.txHash as `0x${string}` | null;
+      if (!txHash) continue;
+
+      try {
+        const receipt = await this.client.getTransactionReceipt({ hash: txHash });
+
+        if (receipt.status === 'reverted') {
+          await this.drizzle.db
+            .update(withdrawals)
+            .set({
+              status: WithdrawalStatus.failed,
+              updatedAt: new Date(),
+            })
+            .where(eq(withdrawals.txHash, txHash));
+          continue;
+        }
+
+        for (const log of receipt.logs) {
+          if (log.address.toLowerCase() !== config.contractAddress.toLowerCase()) {
+            continue;
+          }
+
+          try {
+            const decoded = decodeEventLog({
+              abi: [depositedAbi],
+              data: log.data,
+              topics: log.topics,
+            });
+            if (decoded.eventName === 'Deposited') {
+              await this.handleDeposited(config, {
+                args: decoded.args as { user?: `0x${string}`; to?: `0x${string}`; amount?: bigint },
+                blockNumber: receipt.blockNumber,
+                transactionHash: receipt.transactionHash,
+                logIndex: log.logIndex,
+              });
+              continue;
+            }
+          } catch {
+            // ignore non-matching event
+          }
+
+          try {
+            const decoded = decodeEventLog({
+              abi: [withdrawnAbi],
+              data: log.data,
+              topics: log.topics,
+            });
+            if (decoded.eventName === 'Withdrawn') {
+              await this.handleWithdrawn(config, {
+                args: decoded.args as { user?: `0x${string}`; to?: `0x${string}`; amount?: bigint },
+                blockNumber: receipt.blockNumber,
+                transactionHash: receipt.transactionHash,
+                logIndex: log.logIndex,
+              });
+            }
+          } catch {
+            // ignore non-matching event
+          }
+        }
+      } catch (error) {
+        const message = (error as Error).message || '';
+        if (message.includes('TransactionReceiptNotFound')) {
+          continue;
+        }
+        this.logger.warn(`回执查询失败: ${txHash} (${message})`);
+      }
+    }
   }
 }

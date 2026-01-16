@@ -1,0 +1,904 @@
+{
+  "id": "df64f2dc-2806-4e79-88ff-4421a2f0f7fc",
+  "prevId": "38296f71-9b68-446b-8daf-7dec967d0b65",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.agents": {
+      "name": "agents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ownerUserId": {
+          "name": "ownerUserId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric(36, 18)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "AgentStatus",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'enabled'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "agents_status_idx": {
+          "name": "agents_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "agents_ownerUserId_users_id_fk": {
+          "name": "agents_ownerUserId_users_id_fk",
+          "tableFrom": "agents",
+          "tableTo": "users",
+          "columnsFrom": [
+            "ownerUserId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.auth_nonces": {
+      "name": "auth_nonces",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "walletAddress": {
+          "name": "walletAddress",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nonce": {
+          "name": "nonce",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issuedAt": {
+          "name": "issuedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "usedAt": {
+          "name": "usedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "auth_nonces_nonce_key": {
+          "name": "auth_nonces_nonce_key",
+          "columns": [
+            {
+              "expression": "nonce",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "auth_nonces_walletAddress_idx": {
+          "name": "auth_nonces_walletAddress_idx",
+          "columns": [
+            {
+              "expression": "walletAddress",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.balances": {
+      "name": "balances",
+      "schema": "",
+      "columns": {
+        "userId": {
+          "name": "userId",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "available": {
+          "name": "available",
+          "type": "numeric(36, 18)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "frozen": {
+          "name": "frozen",
+          "type": "numeric(36, 18)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "balances_userId_users_id_fk": {
+          "name": "balances_userId_users_id_fk",
+          "tableFrom": "balances",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bills": {
+      "name": "bills",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "jobId": {
+          "name": "jobId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "BillStatus",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'locked'"
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(36, 18)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "releasedAt": {
+          "name": "releasedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "bills_jobId_key": {
+          "name": "bills_jobId_key",
+          "columns": [
+            {
+              "expression": "jobId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bills_status_idx": {
+          "name": "bills_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bills_jobId_jobs_id_fk": {
+          "name": "bills_jobId_jobs_id_fk",
+          "tableFrom": "bills",
+          "tableTo": "jobs",
+          "columnsFrom": [
+            "jobId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.chain_events": {
+      "name": "chain_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "chainId": {
+          "name": "chainId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "txHash": {
+          "name": "txHash",
+          "type": "varchar(66)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "logIndex": {
+          "name": "logIndex",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "eventType": {
+          "name": "eventType",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payloadJson": {
+          "name": "payloadJson",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "blockNumber": {
+          "name": "blockNumber",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "chain_events_chainId_txHash_logIndex_key": {
+          "name": "chain_events_chainId_txHash_logIndex_key",
+          "columns": [
+            {
+              "expression": "chainId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "txHash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "logIndex",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.jobs": {
+      "name": "jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "agentId": {
+          "name": "agentId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "varchar(80)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expectedResult": {
+          "name": "expectedResult",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "JobStatus",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "resultText": {
+          "name": "resultText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resultMetaJson": {
+          "name": "resultMetaJson",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "jobs_userId_idx": {
+          "name": "jobs_userId_idx",
+          "columns": [
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "jobs_agentId_idx": {
+          "name": "jobs_agentId_idx",
+          "columns": [
+            {
+              "expression": "agentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "jobs_status_idx": {
+          "name": "jobs_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "jobs_userId_users_id_fk": {
+          "name": "jobs_userId_users_id_fk",
+          "tableFrom": "jobs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "jobs_agentId_agents_id_fk": {
+          "name": "jobs_agentId_agents_id_fk",
+          "tableFrom": "jobs",
+          "tableTo": "agents",
+          "columnsFrom": [
+            "agentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ledgers": {
+      "name": "ledgers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "direction": {
+          "name": "direction",
+          "type": "LedgerDirection",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "asset": {
+          "name": "asset",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(36, 18)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "LedgerReason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refId": {
+          "name": "refId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ledgers_userId_idx": {
+          "name": "ledgers_userId_idx",
+          "columns": [
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ledgers_userId_users_id_fk": {
+          "name": "ledgers_userId_users_id_fk",
+          "tableFrom": "ledgers",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "walletAddress": {
+          "name": "walletAddress",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "users_walletAddress_key": {
+          "name": "users_walletAddress_key",
+          "columns": [
+            {
+              "expression": "walletAddress",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.withdrawals": {
+      "name": "withdrawals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "WalletTxType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'withdraw'"
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(36, 18)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "WithdrawalStatus",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'requested'"
+        },
+        "txHash": {
+          "name": "txHash",
+          "type": "varchar(66)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requestedAt": {
+          "name": "requestedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "withdrawals_status_idx": {
+          "name": "withdrawals_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "withdrawals_userId_users_id_fk": {
+          "name": "withdrawals_userId_users_id_fk",
+          "tableFrom": "withdrawals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.AgentStatus": {
+      "name": "AgentStatus",
+      "schema": "public",
+      "values": [
+        "enabled",
+        "disabled"
+      ]
+    },
+    "public.BillStatus": {
+      "name": "BillStatus",
+      "schema": "public",
+      "values": [
+        "locked",
+        "released"
+      ]
+    },
+    "public.JobStatus": {
+      "name": "JobStatus",
+      "schema": "public",
+      "values": [
+        "open",
+        "running",
+        "pending_review",
+        "completed"
+      ]
+    },
+    "public.LedgerDirection": {
+      "name": "LedgerDirection",
+      "schema": "public",
+      "values": [
+        "credit",
+        "debit"
+      ]
+    },
+    "public.LedgerReason": {
+      "name": "LedgerReason",
+      "schema": "public",
+      "values": [
+        "deposit",
+        "withdraw",
+        "job_lock",
+        "job_release",
+        "mint",
+        "burn"
+      ]
+    },
+    "public.WalletTxType": {
+      "name": "WalletTxType",
+      "schema": "public",
+      "values": [
+        "deposit",
+        "withdraw"
+      ]
+    },
+    "public.WithdrawalStatus": {
+      "name": "WithdrawalStatus",
+      "schema": "public",
+      "values": [
+        "requested",
+        "sent",
+        "confirmed",
+        "failed"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

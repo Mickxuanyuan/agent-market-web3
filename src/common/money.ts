@@ -1,4 +1,4 @@
-const DEFAULT_SCALE = 18n;
+const DEFAULT_SCALE = 6n;
 
 // 将十进制字符串（如 "12.34"）转成定点整数（BigInt）。
 // - scale 默认 18：对应 DECIMAL(36,18) 的“最小单位”

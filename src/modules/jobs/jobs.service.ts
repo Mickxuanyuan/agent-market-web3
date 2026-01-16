@@ -226,18 +226,18 @@ export class JobsService {
   async confirm(user: CurrentUser, jobId: bigint) {
     const rows = await this.drizzle.db
       .select({
-        jobId: jobs.id,
-        jobStatus: jobs.status,
-        jobUserId: jobs.userId,
-        jobAgentId: jobs.agentId,
-        jobTitle: jobs.title,
-        jobCategory: jobs.category,
-        jobDescription: jobs.description,
-        jobExpectedResult: jobs.expectedResult,
-        jobResultText: jobs.resultText,
-        jobResultMetaJson: jobs.resultMetaJson,
-        jobCreatedAt: jobs.createdAt,
-        jobUpdatedAt: jobs.updatedAt,
+        id: jobs.id,
+        status: jobs.status,
+        userId: jobs.userId,
+        agentId: jobs.agentId,
+        title: jobs.title,
+        category: jobs.category,
+        description: jobs.description,
+        expectedResult: jobs.expectedResult,
+        resultText: jobs.resultText,
+        resultMetaJson: jobs.resultMetaJson,
+        createdAt: jobs.createdAt,
+        updatedAt: jobs.updatedAt,
         agentOwnerUserId: agents.ownerUserId,
       })
       .from(jobs)
@@ -246,10 +246,10 @@ export class JobsService {
       .limit(1);
     if (!rows[0]) throw new NotFoundException('Job not found');
 
-    if (rows[0].jobStatus === JobStatus.completed) {
+    if (rows[0].status === JobStatus.completed) {
       return rows[0];
     }
-    if (rows[0].jobStatus !== JobStatus.pendingReview) {
+    if (rows[0].status !== JobStatus.pendingReview) {
       throw new BadRequestException('Job is not ready to confirm');
     }
 
@@ -298,7 +298,7 @@ export class JobsService {
           frozen: sql`${balances.frozen} - ${bill.billAmount}`,
           updatedAt: now,
         })
-        .where(eq(balances.userId, rows[0].jobUserId));
+        .where(eq(balances.userId, rows[0].userId));
 
       await tx
         .insert(balances)
@@ -320,7 +320,7 @@ export class JobsService {
 
       await tx.insert(ledgers).values([
         {
-          userId: rows[0].jobUserId,
+          userId: rows[0].userId,
           direction: LedgerDirection.debit,
           asset: ASSET_SYMBOL,
           amount: bill.billAmount,

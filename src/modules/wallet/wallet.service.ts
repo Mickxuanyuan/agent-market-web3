@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { CurrentUser } from '../../common/auth/types';
 import {
   LedgerDirection,
@@ -116,6 +116,33 @@ export class WalletService {
     const now = new Date();
 
     return this.drizzle.db.transaction(async (tx) => {
+      if (txHash) {
+        const existing = await tx
+          .select()
+          .from(withdrawals)
+          .where(
+            and(
+              eq(withdrawals.userId, user.id),
+              eq(withdrawals.type, WalletTxType.withdraw),
+              eq(withdrawals.txHash, txHash),
+            ),
+          )
+          .limit(1);
+
+        if (existing[0]) {
+          const row = existing[0];
+          return {
+            id: row.id.toString(),
+            type: row.type as WalletTxType,
+            amount: row.amount,
+            status: row.status as WithdrawalStatus,
+            txHash: row.txHash ?? undefined,
+            requestedAt: row.requestedAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+          };
+        }
+      }
+
       await tx
         .insert(balances)
         .values({
@@ -180,7 +207,7 @@ export class WalletService {
         id: withdrawal.id.toString(),
         type: withdrawal.type as WalletTxType,
         amount: withdrawal.amount,
-        status: withdrawal.status,
+        status: withdrawal.status as WithdrawalStatus,
         txHash: withdrawal.txHash ?? undefined,
         requestedAt: withdrawal.requestedAt.toISOString(),
         updatedAt: withdrawal.updatedAt.toISOString(),
@@ -202,6 +229,33 @@ export class WalletService {
 
     const now = new Date();
 
+    if (txHash) {
+      const existing = await this.drizzle.db
+        .select()
+        .from(withdrawals)
+        .where(
+          and(
+            eq(withdrawals.userId, user.id),
+            eq(withdrawals.type, WalletTxType.deposit),
+            eq(withdrawals.txHash, txHash),
+          ),
+        )
+        .limit(1);
+
+      if (existing[0]) {
+        const row = existing[0];
+        return {
+          id: row.id.toString(),
+          type: row.type as WalletTxType,
+          amount: row.amount,
+          status: row.status as WithdrawalStatus,
+          txHash: row.txHash ?? undefined,
+          requestedAt: row.requestedAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+        };
+      }
+    }
+
     const rows = await this.drizzle.db
       .insert(withdrawals)
       .values({
@@ -220,7 +274,7 @@ export class WalletService {
       id: deposit.id.toString(),
       type: deposit.type as WalletTxType,
       amount: deposit.amount,
-      status: deposit.status,
+      status: deposit.status as WithdrawalStatus,
       txHash: deposit.txHash ?? undefined,
       requestedAt: deposit.requestedAt.toISOString(),
       updatedAt: deposit.updatedAt.toISOString(),
@@ -239,7 +293,7 @@ export class WalletService {
       id: row.id.toString(),
       type: row.type as WalletTxType,
       amount: row.amount,
-      status: row.status,
+      status: row.status as WithdrawalStatus,
       txHash: row.txHash ?? undefined,
       requestedAt: row.requestedAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),

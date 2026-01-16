@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { SQL } from 'drizzle-orm';
 import { and, eq, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../drizzle/drizzle.service';
 import { agents } from '../../drizzle/schema';
@@ -77,7 +78,7 @@ export class AgentsService {
     ownerUserId?: bigint;
   }): Promise<{ items: typeof agents.$inferSelect[]; total: number }> {
     const offset = (params.page - 1) * params.pageSize;
-    const conditions = [];
+    const conditions: SQL<unknown>[] = [];
 
     if (params.status) {
       conditions.push(eq(agents.status, params.status));
